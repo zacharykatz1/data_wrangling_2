@@ -136,3 +136,59 @@ as.numeric(factor_vec)
 
 See? Some weird stuff happens in background if you don't keep track of what's going on with your labels and factor level orderings.
 
+```{r}
+nsduh_url = "http://samhda.s3-us-gov-west-1.amazonaws.com/s3fs-public/field-uploads/2k15StateFiles/NSDUHsaeShortTermCHG2015.htm"
+
+table_marj = 
+  read_html(nsduh_url) %>% 
+  html_table() %>% 
+  first() %>%
+  slice(-1)
+
+table_marj
+```
+
+```{r}
+table_marj %>% 
+  select(-contains("P Value")) %>% 
+  pivot_longer(
+    -State,
+    names_to = "age_year",
+    values_to = "percent"
+  ) %>% 
+  # In this case, separate 11 characters from end of phrase
+  separate(age_year, into = c("age", "year"), -11)
+
+marj_df = table_marj %>% 
+  select(-contains("P Value")) %>% 
+  pivot_longer(
+    -State,
+    names_to = "age_year",
+    values_to = "percent"
+  ) %>% 
+  # In this case, separate at open parenthesis
+  separate(age_year, into = c("age", "year"), "\\(") %>% 
+  # Get rid of some extraneous characters and make sure percent is numeric
+  mutate(
+    year = str_replace(year, "\\)", ""),
+    percent = str_replace(percent, "[a-c]$", ""),
+    percent = as.numeric(percent)
+  ) %>% 
+  # Do NOT keep anything in state var that matches these conditions (i.e. regional and national totals)
+  filter(!State %in% c("Total U.S.", "Northeast", "Midwest", "South", "West"))
+```
+
+Now, can do fun data frame stuff.
+
+```{r}
+marj_df %>% 
+  filter(age == "12-17") %>% 
+  mutate(
+    State = fct_reorder(State, percent)
+  ) %>% 
+  ggplot(aes(x = State, y = percent, color = year)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Note that neither color is in order from least to greatest; uses the median.
